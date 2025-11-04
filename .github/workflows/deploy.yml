@@ -1,0 +1,89 @@
+name: Deploy Project to AWS EC2
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  add-docker-compose-to-s3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install awscli
+  
+      - name: Configure AWS CLI
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set region us-east-1
+          aws configure set output json
+
+      - name: Upload docker-compose.yml and .env to S3
+        run: |
+          aws s3 cp docker-compose-prod.yml s3://${{ secrets.S3_BUCKET }}/${{ secrets.S3_OBJECT }}
+          aws s3 cp .env s3://${{ secrets.S3_BUCKET }}/${{ secrets.S3_OBJECT_ENV }}
+
+  deploy-project:
+    needs: add-docker-compose-to-s3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible
+
+      - name: Run Ansible playbook to deploy project
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_OBJECT: ${{ secrets.S3_OBJECT }}
+          S3_OBJECT_ENV: ${{ secrets.S3_OBJECT_ENV }}
+          DOCKER_COMPOSE_PATH: /home/ubuntu/docker-compose.yml
+          ENV_PATH: /home/ubuntu/.env
+        run: |
+
+          printf "%s" "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY_FILE }}" | tr -d '\r' > ansible_key.pem
+          chmod 600 ansible_key.pem
+          ansible-playbook ansible/deploy-project-ci.yml \
+          -i ${{ secrets.ANSIBLE_HOST_IP}}, --extra-vars "ansible_user=${{ secrets.ANSIBLE_USER }}" \
+          --extra-vars "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'" \
+          --extra-vars "ansible_host=${{ secrets.ANSIBLE_HOST_IP }}" \
+          --extra-vars "ansible_ssh_private_key_file=ansible_key.pem" \
+          --extra-vars "s3_bucket=${{ secrets.S3_BUCKET }}" \
+          --extra-vars "s3_object=${{ secrets.S3_OBJECT }}" \
+          --extra-vars "s3_object_env=${{ secrets.S3_OBJECT_ENV }}" \
+          --extra-vars "docker_compose_path=/home/ubuntu/docker-compose.yml" \
+          --extra-vars "env_path=/home/ubuntu/.env" \
+          --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY_ID }}" \
+          --extra-vars "aws_secret_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+          --extra-vars "aws_region=us-east-1"
+          rm ansible_key.pem
+      
+      - name: Find the CLIENT_PORT from .env and add it as a summary
+        id: find-client-port
+        run: |
+          CLIENT_PORT=$(grep -oP '(?<=^CLIENT_PORT=).*' .env)
+          echo "CLIENT_PORT=$CLIENT_PORT" >> $GITHUB_STEP_SUMMARY

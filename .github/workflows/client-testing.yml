@@ -1,0 +1,85 @@
+name: Run Client Tests and Upload coverage report
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        required: true
+        type: string
+      node-version:
+        required: true
+        type: string
+
+
+jobs:
+  run-client-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ inputs.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: 'pip'
+
+      - name: Set up Node.js ${{ inputs.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install Client dependencies
+        working-directory: client
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Server dependencies
+        working-directory: server
+        run: |
+          npm install ci
+
+      - name: Run postgres container
+        shell: bash
+        run: |
+          docker compose -f postgres-compose.yml up -d
+          sleep 5
+
+      # - name: Run server tests
+      #   working-directory: server
+      #   run: |
+      #     npm run test-cicd
+
+      - name: Start server
+        working-directory: server
+        run: |
+          npm start &
+          sleep 5
+
+      - name: Run client tests
+        working-directory: client
+        run: |
+          pytest --cov=app --cov-report=xml --cov-report=html --disable-warnings
+
+      - name: Stop server
+        working-directory: server
+        run: |
+          kill $(lsof -t -i:5000)
+          sleep 5
+
+      - name: Upload server coverage report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-coverage-report
+          path: server/coverage/clover.xml
+          retention-days: 1
+
+      - name: Upload client coverage report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-report
+          path: client/coverage.xml
+          retention-days: 1

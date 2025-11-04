@@ -1,0 +1,17 @@
+---
+
+- name: Install docker
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Install docker and dependencies
+      include_tasks: roles/install-docker/tasks/main.yml
+
+- name: Deploy project
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Run docker compose
+      include_tasks: roles/run-docker-compose/tasks/main.yml

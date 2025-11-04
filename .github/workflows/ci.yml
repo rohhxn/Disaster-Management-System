@@ -1,0 +1,37 @@
+on:
+  # Trigger analysis when pushing to your main branches, and when creating a pull request.
+  push:
+    branches:
+      - main
+      - 'releases/**'
+  pull_request:
+      types: [opened, synchronize, reopened]
+      branches:
+        - main
+        - 'releases/**'
+
+name: Main Workflow
+jobs:
+
+  run-client-tests:
+    uses: ./.github/workflows/client-testing.yml
+    secrets: inherit
+    with:
+      python-version: '3.11'
+      node-version: '22'
+
+  sonarqube:
+    needs: [run-client-tests]
+    uses: ./.github/workflows/sonarqube.yml
+    secrets: inherit
+
+  build-and-push-docker-image:
+    if: github.event_name == 'release' || github.event_name == 'push' && github.ref_name == 'main'
+    uses: ./.github/workflows/docker-ci.yml
+    secrets: inherit
+
+  deploy-project:
+    if: github.event_name == 'release' || github.event_name == 'push' && github.ref_name == 'main'
+    needs: [build-and-push-docker-image]
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

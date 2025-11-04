@@ -1,0 +1,81 @@
+
+
+networks:
+  dams-internal-network:
+    driver: bridge
+  dams-external-network:
+    driver: bridge
+
+volumes:
+  dams-postgres-data:
+
+services:
+  dams-postgres:
+    image: postgres:latest
+    container_name: dams-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - dams-postgres-data:/var/lib/postgresql/data
+    networks:
+      - dams-internal-network
+
+  dams-server:
+    image: ghcr.io/parvathyullas25/dams/server:main
+    container_name: dams-server
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${SERVER_PORT} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      DB_HOST: dams-postgres
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      DB_DIALECT: ${DB_DIALECT}
+      JWT_TOKEN: ${JWT_TOKEN}
+      PORT: ${SERVER_PORT}
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    depends_on:
+      dams-postgres:
+        condition: service_healthy
+    networks:
+      - dams-internal-network
+      - dams-external-network
+
+  dams-client:
+    image: ghcr.io/parvathyullas25/dams/client:main
+    container_name: dams-client
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${CLIENT_PORT}/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      CLIENT_HOST: "0.0.0.0"
+      CLIENT_PORT: ${CLIENT_PORT}
+      SERVER_HOST: "dams-server"
+      SERVER_PORT: ${SERVER_PORT}
+    ports:
+      - "${CLIENT_PORT}:${CLIENT_PORT}"
+    depends_on:
+      dams-server:
+        condition: service_healthy
+    networks:
+      - dams-external-network

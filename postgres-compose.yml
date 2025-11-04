@@ -1,0 +1,16 @@
+volumes:
+  dams-postgres-data:
+
+services:
+  dams-postgres:
+    image: postgres:latest
+    container_name: dams-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - dams-postgres-data:/var/lib/postgresql/data

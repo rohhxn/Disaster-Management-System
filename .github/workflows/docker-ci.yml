@@ -1,0 +1,50 @@
+name: Build and Push Docker Images
+
+on:
+  workflow_call:
+
+jobs:
+  build-and-push-docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Docker Buildx for client
+        working-directory: client
+        shell: bash
+        run: |
+          if [[ ${{ github.event_name }} == 'release' ]]; then
+            export TAG="${{ github.event.release.tag_name }}"
+          elif [[ ${{ github.event_name }} == 'push' && ${{ github.ref_name }} == 'main' ]]; then
+            export TAG="latest"
+          else
+            export TAG="dev"
+          fi
+          docker buildx create --use
+          docker buildx build --platform linux/amd64,linux/arm64 --push -t ghcr.io/parvathyullas25/dams/client:$TAG .
+          if [[ $TAG == 'latest' ]]; then
+            docker buildx build --platform linux/amd64,linux/arm64 --push -t ghcr.io/parvathyullas25/dams/client:main .
+          fi
+      - name: Run Docker Buildx for server
+        working-directory: server
+        run: |
+          if [[ ${{ github.event_name }} == 'release' ]]; then
+            export TAG="${{ github.event.release.tag_name }}"
+          elif [[ ${{ github.event_name }} == 'push' && ${{ github.ref_name }} == 'main' ]]; then
+            export TAG="latest"
+          else
+            export TAG="dev"
+          fi
+          docker buildx create --use
+          docker buildx build --platform linux/amd64,linux/arm64 --push -t ghcr.io/parvathyullas25/dams/server:$TAG .
+          if [[ $TAG == 'latest' ]]; then
+            docker buildx build --platform linux/amd64,linux/arm64 --push -t ghcr.io/parvathyullas25/dams/server:main .
+          fi
