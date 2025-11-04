@@ -1,0 +1,20 @@
+# Copy this file to terraform.tfvars and update with your values
+
+region            = "us-east-1"
+instance_type     = "t2.medium"
+key_name          = "dams-key"
+public_key_path   = "~/.ssh/dams-key.pub"
+root_volume_size  = 30
+environment       = "production"
+
+# Amazon Linux 2023 AMI IDs by region
+# ami_id for us-east-1 (N. Virginia)
+ami_id = "ami-0dfcb1ef8550277af"
+
+# Other regions (uncomment and use the appropriate one):
+# us-east-2 (Ohio): ami-0f30a9c3a48f3fa79
+# us-west-1 (N. California): ami-0cbd38f5a3ed1f87d
+# us-west-2 (Oregon): ami-0c2d06d50ce30b442
+# ap-south-1 (Mumbai): ami-0f58b397bc5c1f2e8
+# ap-southeast-1 (Singapore): ami-0dc2d3e4c0f9ebd18
+# eu-west-1 (Ireland): ami-0d71ea30463e0ff8d
